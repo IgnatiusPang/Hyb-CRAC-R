@@ -1,0 +1,667 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+
+
+```{r include = FALSE}
+## Load libraries 
+if(!require(pacman)) {
+  install.packages("pacman")
+  library(pacman)
+}
+
+p_load(tidyverse)
+p_load(vroom)
+p_load(stringr)
+p_load(here)
+p_load(igraph)
+p_load(magrittr)
+
+```
+
+
+
+
+```{r include = FALSE}
+## Directories Management
+base_dir <-  here::here() 
+data_dir <- file.path( base_dir, "Data")
+results_dir <- file.path(base_dir, "Results")
+source_dir <- file.path(base_dir, "Source")
+hyb_p_val_dir <- file.path( results_dir,  "E_coli_UPEC", "Hybrids_P_Values")
+
+dataset_type <-    "UPEC"   #  "SM_Only" # "JT_Only" #
+
+merged_hyb_p_val_dir <- file.path( results_dir,  "E_coli_UPEC",  "Merged_Hybrids_P_Values", dataset_type)
+
+source( file.path( source_dir, "Common", "common_functions.R") ) 
+
+create_dir_if_not_exists(merged_hyb_p_val_dir )
+
+```
+
+
+knitr::purl( file.path( source_dir, "Demultiplex", "scripts",  "merge_p_values_upec.Rmd"), 
+output=file.path(source_dir, "Demultiplex", "scripts",  "merge_p_values_upec.R") ) 
+
+nohup Rscript --vanilla  merge_p_values_upec.R > run_merge_p_values_upec_${DATE}.log 2>&1 &
+
+
+
+## Parameters 
+```{r}
+# remove hybrids where the two halfs are within threshold distance of nucleotides apart of each other
+threshold_distance_apart <- 100
+
+# Parameters for grouping genomic start sites to speed up comparisons
+grouping_size <- 500
+grouping_adjust <- 250
+```
+
+
+## List of all input files 
+
+```{r}
+
+
+
+list_of_files <- list(   file.path( hyb_p_val_dir,"Output_BC1", "Hyb_Annot", "all_NNNAGAGCN_BC1_L5Ba_Hfq_1.unique.hyb.p_values.tab"),
+  file.path( hyb_p_val_dir,"Output_BC1", "Hyb_Annot", "all_NNNGTGAGCN_BC1_L5Bb_Hfq_2.unique.hyb.p_values.tab"),
+  file.path( hyb_p_val_dir,"Output_BC1", "Hyb_Annot", "all_NNNCACTAGCN_BC1_L5Bc_Hfq_3.unique.hyb.p_values.tab"),
+  file.path( hyb_p_val_dir,"Output_BC2", "Hyb_Annot", "all_NNNTAAGCN_BC2_L5Aa_CIP_1.unique.hyb.p_values.tab"),
+  file.path( hyb_p_val_dir,"Output_BC2", "Hyb_Annot", "all_NNNATTAGCN_BC2_L5Ab_CIP_2.unique.hyb.p_values.tab"),
+  file.path( hyb_p_val_dir,"Output_BC2", "Hyb_Annot", "all_NNNGCGCAGCN_BC2_L5Ac_CIP_3.unique.hyb.p_values.tab"),
+  file.path( hyb_p_val_dir,"Output_BC2", "Hyb_Annot", "all_NNNAGAGCN_BC2_L5Ba_DYP_1.unique.hyb.p_values.tab"),
+  file.path( hyb_p_val_dir,"Output_BC2", "Hyb_Annot", "all_NNNGTGAGCN_BC2_L5Bb_DYP_2.unique.hyb.p_values.tab"),
+  file.path( hyb_p_val_dir,"Output_BC2", "Hyb_Annot", "all_NNNCACTAGCN_BC2_L5Bc_DYP_3.unique.hyb.p_values.tab") ) 
+
+names(list_of_files ) <- c( "Hfq_1", 
+                            "Hfq_2", 
+                            "Hfq_3",
+                            "CIP_1",
+                            "CIP_2",
+                            "CIP_3",
+                            "DYP_1",
+                            "DYP_2",
+                            "DYP_3" )
+
+
+if ( dataset_type == "JT_Only") {
+  list_of_files <- list_of_files[1:8]
+} else if ( dataset_type == "SM_Only") {
+  list_of_files <- list_of_files[9:16]
+} 
+
+
+```
+
+
+```{r}
+
+list_of_tables <- purrr::map( list_of_files, vroom::vroom )
+
+names( list_of_tables) <- names( list_of_files)
+
+```
+
+## Remove tRNA, rRNA
+```{r}
+
+all_hybrids_tbl <-  list_of_tables %>%
+                bind_rows(.id="Experiment_Name") %>%
+  # Need to add rule to remove hybrids where the two halfs are within 100 nt of each other
+  dplyr::filter(  
+      abs( left_genomic_start -  right_genomic_start ) > threshold_distance_apart &
+      abs( left_genomic_start -  right_genomic_stop ) > threshold_distance_apart &
+      abs( left_genomic_stop -  right_genomic_start ) > threshold_distance_apart &
+      abs( left_genomic_stop -  right_genomic_stop ) > threshold_distance_apart  )
+
+
+num_rows_all_hybrids_tbl <- nrow( all_hybrids_tbl )
+
+## Need to put the . in a parenthesis (.)
+# https://stackoverflow.com/questions/37757191/pipe-a-data-frame-to-a-function-whose-argument-pipes-a-dot
+filtered_tbl <- all_hybrids_tbl %>%
+                mutate( expt_hyb_id = paste(Experiment_Name, left_hyb_id, sep=".")) %>%
+                dplyr::filter ( left_rna_class != "tRNA" &
+                                left_rna_class != "rRNA" & 
+                                right_rna_class != "tRNA" &
+                                right_rna_class != "rRNA"  ) 
+
+rm(all_hybrids_tbl)
+rm(list_of_tables)
+gc()
+
+```
+
+
+## List of all hybrids
+```{r}
+
+all_hyb_ids <- filtered_tbl %>%
+  distinct( expt_hyb_id, Experiment_Name, left_hyb_id )
+
+```
+
+
+## Full join on itself
+```{r}
+
+temp_filtered_tbl <- filtered_tbl %>%
+  dplyr::select(-hyb_seq) %>%
+  dplyr::select( Experiment_Name, expt_hyb_id, 
+                 left_rna_class,  left_chromo, left_name,
+                 left_genomic_start,   left_genomic_stop,
+                 left_strand, 
+                 right_rna_class,  right_chromo, right_name,
+                 right_genomic_start, right_genomic_stop,
+                 right_strand) %>%
+  mutate( left_start_grp_a = left_genomic_start %/% grouping_size )  %>%
+  mutate( left_start_grp_b = ( left_genomic_start + grouping_adjust ) %/% grouping_size )  %>%
+  mutate( right_start_grp_a = right_genomic_start %/% grouping_size )  %>%
+  mutate( right_start_grp_b = ( right_genomic_start + grouping_adjust ) %/% grouping_size ) %>%
+  pivot_longer( cols = c( "left_start_grp_a", "left_start_grp_b"),
+                names_to = "left_start_grp",
+                values_to = "left_start_grp_id") %>%
+  pivot_longer( cols = c( "right_start_grp_a", "right_start_grp_b"),
+                names_to = "right_start_grp",
+                values_to = "right_start_grp_id") %>%
+  dplyr::select( -left_start_grp, -right_start_grp ) %>%
+  distinct()
+
+
+same_direction_join <-  temp_filtered_tbl %>%
+  inner_join( temp_filtered_tbl, by=c("left_start_grp_id" = "left_start_grp_id",
+                                      "right_start_grp_id" = "right_start_grp_id") ) %>%
+  dplyr::filter( Experiment_Name.x != Experiment_Name.y )  %>%
+  dplyr::filter( expt_hyb_id.x > expt_hyb_id.y )  %>%
+  dplyr::select( -left_start_grp_id, -right_start_grp_id )
+
+
+different_direction_join <-  temp_filtered_tbl %>%
+  inner_join( temp_filtered_tbl, by=c("left_start_grp_id" = "right_start_grp_id",
+                                      "right_start_grp_id" = "left_start_grp_id" ) ) %>%  
+  dplyr::filter( Experiment_Name.x != Experiment_Name.y )  %>%
+  dplyr::filter( expt_hyb_id.x > expt_hyb_id.y )  %>%
+  dplyr::select( -left_start_grp_id, -right_start_grp_id )
+
+
+
+```
+
+
+```{r}
+
+array_between <- function(a, b, c) {
+  
+  return_list <- purrr::pmap_dbl(list( x=a,  
+                            from=b,  
+                            to=c), 
+                                function(x,
+         from,
+         to) { 
+                                  
+                                if( from < to ) {
+                                  
+                                  between(x, from,  to)
+                                } else {
+                                  
+                                  between(x, to,  from)
+                                }
+                                  
+         })
+  return( return_list )
+  
+}
+```
+
+
+## Overlap same orientation  
+Given Table of hybrids X  and Table of hybrids Y,
+We join the two tables with the following rules: 
+* left-hand-side of hybrid in Table X matches with left-hand-side of hybrid in Table Y, and
+* right-hand-side of hybrid in Table X matches with right-hand-side of hybrid in Table Y
+```{r}
+
+same_direction_compare  <- same_direction_join %>%
+  dplyr::filter( ( array_between( left_genomic_start.y,  left_genomic_start.x,  left_genomic_stop.x ) |
+                   array_between( left_genomic_stop.y,   left_genomic_start.x,  left_genomic_stop.x ) |
+                   array_between( left_genomic_start.x,  left_genomic_start.y,  left_genomic_stop.y ) |
+                   array_between( left_genomic_stop.x,   left_genomic_start.y,  left_genomic_stop.y ) )  &
+                 ( array_between( right_genomic_start.y, right_genomic_start.x, right_genomic_stop.x ) |
+                   array_between( right_genomic_stop.y,  right_genomic_start.x, right_genomic_stop.x ) |
+                   array_between( right_genomic_start.x, right_genomic_start.y, right_genomic_stop.y ) |
+                   array_between( right_genomic_stop.x,  right_genomic_start.y, right_genomic_stop.y ) )  ) %>%
+  dplyr::filter( left_strand.x == left_strand.y & 
+                 right_strand.x == right_strand.y  ) 
+
+same_direction_compare_simple <- same_direction_compare %>%
+  dplyr::select( expt_hyb_id.x,
+                 expt_hyb_id.y) 
+
+
+
+
+```
+
+
+
+```{r eval=FALSE}
+## wierd example 
+# +	410218	410247,	+	410176	410217
+filtered_tbl %>% dplyr::filter( left_hyb_id == "41947_1" )  %>%
+  dplyr::select( left_strand, left_genomic_start,  left_genomic_stop, right_strand, right_genomic_start, right_genomic_stop)
+
+
+```
+
+
+```{r eval=FALSE}
+same_direction_compare_simple %>%
+  dplyr::filter( ( expt_hyb_id.x == "JW_BC1_Ab.1392424_1" & expt_hyb_id.y == "JW_BC1_Ac.943188_1") |
+                   ( expt_hyb_id.x == "JW_BC1_Ac.943188_1" & expt_hyb_id.y == "JW_BC1_Ab.1392424_1" ) )
+
+
+same_direction_join %>%
+  dplyr::filter( ( expt_hyb_id.x == "JW_BC1_Ab.1392424_1" & expt_hyb_id.y == "JW_BC1_Ac.943188_1") |
+                   ( expt_hyb_id.x == "JW_BC1_Ac.943188_1" & expt_hyb_id.y == "JW_BC1_Ab.1392424_1" ) ) %>%
+  dplyr::select( left_genomic_start.x, left_genomic_stop.x,
+                  left_genomic_start.y, left_genomic_stop.y,
+                 right_genomic_start.x, right_genomic_stop.x,
+                 right_genomic_start.y, right_genomic_stop.y ) %>%
+  
+  dplyr::filter( ( array_between( left_genomic_start.y,  left_genomic_start.x,  left_genomic_stop.x ) |
+                   array_between( left_genomic_stop.y,   left_genomic_start.x,  left_genomic_stop.x ) |
+                   array_between( left_genomic_start.x,  left_genomic_start.y,  left_genomic_stop.y ) |
+                   array_between( left_genomic_stop.x,   left_genomic_start.y,  left_genomic_stop.y ) )   )
+
+between(2399933,   2399902,  2399946)
+
+# &
+#                  ( array_between( right_genomic_start.y, right_genomic_start.x, right_genomic_stop.x ) |
+#                    array_between( right_genomic_stop.y,  right_genomic_start.x, right_genomic_stop.x ) |
+#                    array_between( right_genomic_start.x, right_genomic_start.y, right_genomic_stop.y ) |
+#                    array_between( right_genomic_stop.x,  right_genomic_start.y, right_genomic_stop.y ) ) 
+```
+
+
+## Overlap different orientation  
+Given Table of hybrids X  and Table of hybrids Y,
+We join the two tables with the following rules: 
+* left-hand-side of hybrid in Table X matches with right-hand-side of hybrid in Table Y, and
+* right-hand-side of hybrid in Table X matches with left-hand-side of hybrid in Table Y
+```{r}
+
+different_direction_compare  <- different_direction_join %>%
+  dplyr::filter( ( array_between( left_genomic_start.y,  right_genomic_start.x,  right_genomic_stop.x ) |
+                   array_between( left_genomic_stop.y,   right_genomic_start.x,  right_genomic_stop.x ) |
+                   array_between( right_genomic_start.x, left_genomic_start.y, left_genomic_stop.y ) |
+                   array_between( right_genomic_stop.x,  left_genomic_start.y, left_genomic_stop.y ) ) &
+                 ( array_between( left_genomic_start.x,  right_genomic_start.y, right_genomic_stop.y ) | 
+                   array_between( left_genomic_stop.x,   right_genomic_start.y, right_genomic_stop.y ) | 
+                   array_between( right_genomic_start.y, left_genomic_start.x, left_genomic_stop.x ) | 
+                   array_between( right_genomic_stop.y,  left_genomic_start.x, left_genomic_stop.x )  ))  %>%
+  dplyr::filter( left_strand.x == right_strand.y &
+                   right_strand.x == left_strand.x )  
+
+
+different_direction_compare_simple <- different_direction_compare %>%
+  dplyr::select( expt_hyb_id.x,
+                 expt_hyb_id.y) %>%
+  collect()
+```
+
+
+```{r}
+group_hybrids_tbl <- same_direction_compare_simple %>%
+  bind_rows( different_direction_compare_simple) %>%
+  dplyr::filter( expt_hyb_id.x > expt_hyb_id.y ) 
+
+group_hybrids_net <- graph_from_data_frame(group_hybrids_tbl, directed = FALSE, vertices = NULL)
+
+clusters <- components(group_hybrids_net)
+
+#groups(clusters)
+
+cluster_id_tbl <- clusters$membership %>%
+  t() %>% t() %>% as.data.frame() %>%
+  rownames_to_column() %>%
+  set_colnames(c("expt_hyb_id", "cluster_id")) %>%
+  mutate( cluster_id = paste( "cluster_", cluster_id, sep=""))
+
+```
+
+
+```{r}
+
+same_direction_cmp_cluster <- same_direction_compare %>%
+  left_join(cluster_id_tbl , by=c( "expt_hyb_id.x" = "expt_hyb_id"))
+
+different_direction_cmp_cluster <- different_direction_compare %>%
+  left_join(cluster_id_tbl , by=c( "expt_hyb_id.x" = "expt_hyb_id"))
+
+
+colnames(different_direction_cmp_cluster)
+
+```
+
+
+
+```{r}
+array_min <- function ( a, b, c, d) {
+  
+  result_min <- purrr::pmap_dbl( list( a, b, c, d), 
+                                 function(a, b, c , d){ min(a, b, c, d) } ) %>% 
+                min 
+  
+  return( result_min )
+}
+ 
+ 
+array_max <- function ( a, b, c, d) {
+  
+  result_max <- purrr::pmap_dbl( list( a, b, c, d), 
+                                 function(a, b, c , d){ max(a, b, c, d) } ) %>% 
+                max 
+  
+  return( result_max )
+}
+```
+
+```{r}
+clean_pos_diff_dir <- different_direction_cmp_cluster %>%
+  dplyr::select( cluster_id, 
+                 left_rna_class.x,  left_chromo.x, left_name.x, 
+                 left_strand.x,
+                 left_genomic_start.x,
+                 left_genomic_stop.x,
+                 right_rna_class.x,  right_chromo.x, right_name.x, 
+                 right_strand.x,
+                 right_genomic_start.x,
+                 right_genomic_stop.x,
+                 left_genomic_start.y,
+                 left_genomic_stop.y,
+                 right_genomic_start.y,
+                 right_genomic_stop.y )  %>%
+  group_by( cluster_id,  left_rna_class.x,  left_chromo.x, left_name.x, left_strand.x, 
+            right_rna_class.x,  right_chromo.x, right_name.x, right_strand.x) %>%
+  summarise( left_genomic_start = case_when( left_strand.x == "+" ~ array_min(  left_genomic_start.x, 
+                                          left_genomic_stop.x,   
+                                          right_genomic_start.y, 
+                                          right_genomic_stop.y ),
+                                          left_strand.x == "-" ~ array_max( left_genomic_start.x, 
+                                          left_genomic_stop.x,   
+                                          right_genomic_start.y, 
+                                          right_genomic_stop.y ) ),
+              left_genomic_stop = case_when( left_strand.x == "+" ~ array_max( left_genomic_start.x, 
+                                          left_genomic_stop.x,   
+                                          right_genomic_start.y, 
+                                          right_genomic_stop.y ),
+                                          left_strand.x == "-" ~ array_min( left_genomic_start.x, 
+                                          left_genomic_stop.x,   
+                                          right_genomic_start.y, 
+                                          right_genomic_stop.y )  ),
+              right_genomic_start = case_when( right_strand.x == "+" ~ array_min( left_genomic_start.y, 
+                                          left_genomic_stop.y,   
+                                          right_genomic_start.x, 
+                                          right_genomic_stop.x ),
+                                          right_strand.x == "-" ~ array_max( left_genomic_start.y, 
+                                          left_genomic_stop.y,   
+                                          right_genomic_start.x, 
+                                          right_genomic_stop.x ) ),
+              right_genomic_stop = case_when( right_strand.x == "+" ~ array_max( left_genomic_start.y, 
+                                          left_genomic_stop.y,   
+                                          right_genomic_start.x, 
+                                          right_genomic_stop.x ),
+                                          right_strand.x == "-" ~ array_min( left_genomic_start.y, 
+                                          left_genomic_stop.y,   
+                                          right_genomic_start.x, 
+                                          right_genomic_stop.x ) )  ) %>%
+  ungroup() %>%
+  distinct()
+             
+colnames( clean_pos_diff_dir) <- str_replace_all( colnames(clean_pos_diff_dir), "\\.x$", "" )
+
+clean_pos_diff_dir
+
+```
+
+```{r}
+
+clean_pos_same_dir <- same_direction_cmp_cluster %>%
+  dplyr::select( cluster_id, 
+                 left_rna_class.x,  left_chromo.x, left_name.x, 
+                 left_strand.x,
+                 left_genomic_start.x,
+                 left_genomic_stop.x,
+                 right_rna_class.x,  right_chromo.x, right_name.x, 
+                 right_strand.x,
+                 right_genomic_start.x,
+                 right_genomic_stop.x,
+                 left_genomic_start.y,
+                 left_genomic_stop.y,
+                 right_genomic_start.y,
+                 right_genomic_stop.y )  %>%
+  group_by( cluster_id,  left_rna_class.x,  left_chromo.x, left_name.x, left_strand.x, 
+            right_rna_class.x,  right_chromo.x, right_name.x, right_strand.x) %>%
+  summarise( left_genomic_start = case_when( left_strand.x == "+" ~ array_min(  left_genomic_start.x, 
+                                          left_genomic_stop.x,   
+                                          left_genomic_start.y, 
+                                          left_genomic_stop.y ),
+                                          left_strand.x == "-" ~ array_max( left_genomic_start.x, 
+                                          left_genomic_stop.x,   
+                                          left_genomic_start.y, 
+                                          left_genomic_stop.y ) ),
+              left_genomic_stop = case_when( left_strand.x == "+" ~ array_max( left_genomic_start.x, 
+                                          left_genomic_stop.x,   
+                                          left_genomic_start.y, 
+                                          left_genomic_stop.y ),
+                                          left_strand.x == "-" ~ array_min( left_genomic_start.x, 
+                                          left_genomic_stop.x,   
+                                          left_genomic_start.y, 
+                                          left_genomic_stop.y )  ),
+              right_genomic_start = case_when( right_strand.x == "+" ~ array_min( right_genomic_start.x, 
+                                          right_genomic_stop.x,   
+                                          right_genomic_start.y, 
+                                          right_genomic_stop.y ),
+                                          right_strand.x == "-" ~ array_max( right_genomic_start.x, 
+                                          right_genomic_stop.x,   
+                                          right_genomic_start.y, 
+                                          right_genomic_stop.y ) ),
+              right_genomic_stop = case_when( right_strand.x == "+" ~ array_max( right_genomic_start.x, 
+                                          right_genomic_stop.x,   
+                                          right_genomic_start.y, 
+                                          right_genomic_stop.y ),
+                                          right_strand.x == "-" ~ array_min( right_genomic_start.x, 
+                                          right_genomic_stop.x,   
+                                          right_genomic_start.y, 
+                                          right_genomic_stop.y ) )  ) %>%
+  ungroup() %>%
+  distinct()
+             
+colnames( clean_pos_same_dir) <- str_replace_all( colnames(clean_pos_same_dir), "\\.x$", "" )
+
+clean_pos_same_dir  
+
+```
+
+
+cluster_id
+g_x
+left_hyb_count
+g_y
+right_hyb_count
+p_value
+cumulative_connection_score
+number_expts
+two_way_merged
+
+```{r}
+
+colnames( clean_pos_same_dir)
+
+# "cluster_id"          "left_rna_class"      "left_chromo"         "left_name"           "left_strand"         "right_rna_class"     "right_chromo"        "right_name"         
+#  "right_strand"        "left_genomic_start"  "left_genomic_stop"   "right_genomic_start" "rigth_genomic_stop" 
+
+
+## get together the hybrids that were found in multiple experiments, overlapping in the same direciton, or overlappin in different direction
+combined_data <- clean_pos_same_dir %>%
+  mutate( direction = "Same" ) %>%
+  bind_rows(clean_pos_diff_dir %>%
+  mutate( direction = "Different") )%>%
+  arrange( cluster_id) 
+
+## Filter the rows to find those where  the left hand side hybrid half is half with the smaller genomic co-ordinates. 
+part_a_combined_data <- combined_data %>%
+  dplyr::filter(  purrr::map2_dbl(left_genomic_start, left_genomic_stop, ~max(.x, .y)) <   purrr::map2_dbl(right_genomic_start, right_genomic_stop, ~max(.x, .y)))
+
+updated_colnames <-    colnames(combined_data) %>%
+  str_replace_all(  "left_", "temp_" )  %>%
+  str_replace_all(  "right_", "left_" ) %>%
+  str_replace_all(  "temp_", "right_" ) 
+
+
+## These rows we have to swap the left and right to make the left hand side hybrid half the half with the smaller genomic co-ordinates. 
+part_b_combined_data <- combined_data %>%
+  dplyr::filter(  purrr::map2_dbl(left_genomic_start, left_genomic_stop, ~min(.x, .y)) >   purrr::map2_dbl(right_genomic_start, right_genomic_stop, ~min(.x, .y))) %>%
+  set_colnames(  updated_colnames ) %>%
+  dplyr::select( one_of( colnames(combined_data )))
+
+
+
+    # left_rna_class, left_name,
+    # right_rna_class, right_name,
+
+
+make_array_into_string <- function(input_array) {
+  
+  return( purrr::map_chr(input_array, ~paste( unique(.), collapse=";" ) )  )
+}                 
+               
+
+## Recombine the data and then merge the rows from the same sequence cluster
+## Extend the position to cover the entire covered region. 
+cln_merged_positions_tbl <- part_a_combined_data %>%
+  bind_rows( part_b_combined_data) %>%
+  arrange(cluster_id ) %>%
+  dplyr::select( -direction ) %>%
+  group_by( cluster_id,  left_chromo,  left_strand, 
+             right_chromo,  right_strand) %>%
+  summarise( left_genomic_start = case_when( left_strand == "+" ~ min(  left_genomic_start ),
+                                          left_strand == "-" ~ max( left_genomic_start) ),
+              left_genomic_stop = case_when( left_strand == "+" ~ max( left_genomic_stop),
+                                          left_strand == "-" ~ min( left_genomic_stop)  ),
+              right_genomic_start = case_when( right_strand == "+" ~ min( right_genomic_start ),
+                                          right_strand == "-" ~ max( right_genomic_start ) ),
+              right_genomic_stop = case_when( right_strand == "+" ~ max( right_genomic_stop ),
+                                          right_strand == "-" ~ min( right_genomic_stop ) ), 
+              left_rna_class =  unique( list( left_rna_class )  ),
+              left_name =  unique( list( left_name )  ),
+              right_rna_class =  unique( list( right_rna_class )  ),
+              right_name =  unique( list( right_name )  ) ) %>%
+  ungroup() %>%
+  distinct() %>%
+  mutate( left_rna_class = make_array_into_string(left_rna_class) ,
+          left_name = make_array_into_string(left_name) ,
+          right_rna_class = make_array_into_string(right_rna_class) ,
+          right_name = make_array_into_string(right_name)     )
+  
+cln_merged_positions_tbl
+
+```
+
+
+
+
+## Calculate updated p-value
+```{r}
+merged_p_value <- filtered_tbl %>%
+  inner_join(cluster_id_tbl , by=c( "expt_hyb_id" = "expt_hyb_id")) %>%
+  dplyr::select( cluster_id,  Experiment_Name,  expt_hyb_id,left_hyb_id, p_value, total_hybrids ) %>%
+  arrange( cluster_id, Experiment_Name, expt_hyb_id, left_hyb_id, p_value) %>%
+  group_by( cluster_id, Experiment_Name ) %>%
+  summarise( p_value = min(p_value),
+            total_hybrids = sum(total_hybrids)) %>%
+  ungroup() %>%
+  group_by( cluster_id) %>%
+  summarise( num_expt = n(),
+             total_hybrids = sum(total_hybrids), 
+             sum_log_p_value = sum( log(p_value)),
+             combined_p_value = 1-pchisq(-2*sum( log(p_value)), 2*n())) %>%
+  ungroup()
+
+
+# 1 - pchisq(-2*-388.124113, 2*2)
+# 
+# merged_p_value
+
+```
+
+
+```{r}
+
+## hybrids that were identified from multiple experiments
+merged_p_value_and_positions <- cln_merged_positions_tbl %>%
+  left_join( merged_p_value, by=c("cluster_id")) %>%
+  dplyr::select(-sum_log_p_value) %>%
+  dplyr::rename( number_expts = "num_expt") %>%
+  dplyr::mutate( number_expts = as.double(number_expts)) %>%
+  mutate( Experiment_Name = "Merged",
+          expt_hyb_id = paste( Experiment_Name, cluster_id, sep=".") ) %>%
+  mutate(  left_hyb_id = paste0(cluster_id,".left" )) %>%
+  mutate( right_hyb_id = paste0(cluster_id,".right" )) %>%
+  dplyr::select(-cluster_id)
+
+## hybrids that did not have common hybrids in multiple experiments and therefore were non-merged
+non_merged_rows <- filtered_tbl %>%
+  anti_join( cluster_id_tbl, by=c("expt_hyb_id")) %>%
+  mutate( combined_p_value  = p_value)
+
+
+## Rows that were merged, output them as a separate file for tracking back the calculations
+merged_rows_before_merge <- filtered_tbl %>%
+  inner_join( cluster_id_tbl, by=c("expt_hyb_id")) %>%
+  mutate( combined_p_value  = p_value) %>%
+  dplyr::select( one_of( c("cluster_id", colnames(filtered_tbl), "combined_p_value"))) %>%
+  arrange(cluster_id, expt_hyb_id)
+
+vroom::vroom_write(merged_rows_before_merge, file.path( merged_hyb_p_val_dir, "merged_rows_before_merge.tab") ) 
+
+## Calculate adjusted p-values
+final_table <-  non_merged_rows %>%
+  bind_rows( merged_p_value_and_positions ) %>%
+  mutate( merged_bh_adj_p_value = p.adjust( combined_p_value, method="BH", n=num_rows_all_hybrids_tbl ))
+
+
+final_table %>%
+  dplyr::select(number_expts) %>%
+  tail()
+
+vroom::vroom_write(final_table, file.path( merged_hyb_p_val_dir, "merged_p_values_results.tab") ) 
+
+## Filter hybrid results by the merge adjusted p-value
+filtered_final_table <- final_table %>%
+  dplyr::filter( merged_bh_adj_p_value < 0.05 )
+
+nrow(final_table)
+nrow(filtered_final_table)
+
+vroom::vroom_write(filtered_final_table, file.path( merged_hyb_p_val_dir, "filtered_merged_p_values_results.tab") ) 
+
+```
+
+
+
+```{r}
+final_table %>%
+  dplyr::filter( merged_bh_adj_p_value >= 0.05 & bh_adj_p_value < 0.05 ) 
+```
+
+
+
+
+
+

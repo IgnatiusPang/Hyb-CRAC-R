@@ -1,0 +1,7 @@
+# annogesic transcriptome annotations for JKD6009
+
+GCF_900607245.1_JKD6009_genomic_merge_features.gff # raw annogesic output
+GCF_900607245.1_JKD6009_genomic_merge_features_simple_annot.gff # Simplifiying and cleaning the annogesic output gives you this file
+GCF_900607245.1_JKD6009_genomic_merge_features_simple_annot_checked.gtf # run through pyCheckGTF.py
+
+

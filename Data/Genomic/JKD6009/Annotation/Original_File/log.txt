@@ -1,0 +1,15 @@
+/srv/scratch/z3506614/staphylococcus/staph_clash_manuscript/ANNOgesic/output//transcripts/gffs/GCF_900607245.1_JKD6009_genomic_transcript.gff exists
+/srv/scratch/z3506614/staphylococcus/staph_clash_manuscript/ANNOgesic/output//sRNAs/gffs/all_candidates/GCF_900607245.1_JKD6009_genomic_sRNA.gff_5utr_filtered_plus_SRD_JKD6009.gff exists
+/srv/scratch/z3506614/staphylococcus/staph_clash_manuscript/ANNOgesic/output//crisprs/gffs/all_candidates/GCF_900607245.1_JKD6009_genomic_CRISPR.gff exists
+/srv/scratch/z3506614/staphylococcus/staph_clash_manuscript/ANNOgesic/output//operons/gffs/GCF_900607245.1_JKD6009_genomic_operon.gff exists
+/srv/scratch/z3506614/staphylococcus/staph_clash_manuscript/ANNOgesic/output//processing_sites/gffs/GCF_900607245.1_JKD6009_genomic_processing.gff exists
+/srv/scratch/z3506614/staphylococcus/staph_clash_manuscript/ANNOgesic/output//riboswitches/gffs/GCF_900607245.1_JKD6009_genomic_riboswitch.gff exists
+/srv/scratch/z3506614/staphylococcus/staph_clash_manuscript/ANNOgesic/output//RNA_thermometers/gffs/GCF_900607245.1_JKD6009_genomic_RNA_thermometer.gff exists
+/srv/scratch/z3506614/staphylococcus/staph_clash_manuscript/ANNOgesic/input/manual_terminators/JKD6009_term_seq_terminators_intersect_ANNO_more2cpm.gff exists
+/srv/scratch/z3506614/staphylococcus/staph_clash_manuscript/ANNOgesic/output//TSSs/gffs/GCF_900607245.1_JKD6009_genomic_TSS.gff exists
+/srv/scratch/z3506614/staphylococcus/staph_clash_manuscript/ANNOgesic/output//UTRs/5UTRs/gffs/GCF_900607245.1_JKD6009_genomic_5UTR.gff exists
+/srv/scratch/z3506614/staphylococcus/staph_clash_manuscript/ANNOgesic/output//UTRs/3UTRs/gffs/GCF_900607245.1_JKD6009_genomic_3UTR.gff exists
+/srv/scratch/z3506614/staphylococcus/staph_clash_manuscript/ANNOgesic/input/references/annotations/GCF_900607245.1_JKD6009_genomic.gff exists
+Comparing transripts and other features to get parental transcripts.
+Combining all the gff files and merge the features.
+	/srv/scratch/z3506614/staphylococcus/staph_clash_manuscript/ANNOgesic/output/merge_all_features/GCF_900607245.1_JKD6009_genomic_merge_features.gff is generated.

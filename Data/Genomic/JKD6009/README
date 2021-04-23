@@ -1,0 +1,51 @@
+# transfer JKD6008 GFF annoation to JKD6009 fasta
+# EMBOSS seqret GFF > EMBL format | RATT transfer JKD6008 to JKD6009 | EMBOSS seqret EMBL > GFF format
+
+# make embl format file from GFF
+# NB: I have switched columns 2 & 3 in the GFF to allow feature annotation to be propogated to the EMBL file
+
+module add emboss 
+seqret -sequence Sa_JKD6008.fasta -feature -fformat gff -fopenfile Sa_JKD6008_all_checked_exon.gtf -osformat embl -auto
+
+# move embl file into folder called embl/
+# make chromosome names the same
+# use RATT to transfer annoation
+# FASTA file is downloaded from NCBI accession #GCF_900607245.1 
+# http://ratt.sourceforge.net/documentation.html
+
+module add mummer
+$RATT_HOME/start.ratt.sh embl Sa_JKD6009.fasta Sa_JKD6009_annot Strain.global
+
+# 72 features not transferred - mainly tRNA and scRNA338/9
+
+#convert embl annoation to GFF
+seqret -sequence Sa_JKD6009_annot.Saa_6008_C1.final.embl -feature -osformat gff
+
+# output file = Sa_JKD6009_annot.Saa_6008_C1.final.gff
+
+# use intersectBed to measure how many features in common
+# 	stringent settings to ensures same feature: use stranded 100% recirpicol overlap btw features
+# make chromosomes the same between NCBI and RATT transfer annotations
+# rm FASTA sequence from the end of seqret GFF file
+
+sed 's/Sa_JKD6009_annot.Saa_6008_C1.final/Saa_6009_C1/g' Sa_JKD6009_annot.Saa_6008_C1.final.gff > Sa_JKD6009_annot.Saa_6008_C1.final_chr.gff
+sed 's/NZ_LR027876.1/Saa_6009_C1/g' Sa_JKD6009.gff > Sa_JKD6009_chr.gff
+
+bedtools intersect -wo -s -f 1.0 -r -a Sa_JKD6009_chr.gff -b Sa_JKD6009_annot.Saa_6008_C1.final_chr.gff  > Sa_JKD6009_overlap.gff 
+
+$ wc -l *
+   11421 Sa_JKD6009_annot.Saa_6008_C1.final_chr.gff
+    6149 Sa_JKD6009_chr.gff
+    4738 Sa_JKD6009_overlap.gff
+
+# 77% of the NCBI annotation is retained.
+# The RATT transferred JKD6008 annoation is much richer.
+
+cp Sa_JKD6009_annot.Saa_6008_C1.final_chr.gff /srv/scratch/treelab/genome/saus/JDK6009/Sa_JKD6009_ratt.gff
+
+# annotation file to use for JKD6009 is = /srv/scratch/treelab/genome/saus/JDK6009/Sa_JKD6009_ratt.gff
+# FASTA file to use is = /srv/scratch/treelab/genome/saus/JDK6009/Sa_JKD6009.fasta#
+
+# make a version for pyCRAC | remove duoplicated "sequece_features" | remove Wasabi annoations | iterate over repeated gene names and appends a counter | rename repeated biological feature annoations as feature_*number* | run through pyCheckGTF
+grep -v sequence_feature Sa_JKD6009_ratt.gff | grep -v Wasabi | sed 's/"/@/g' | awk '!/^#/ { split($9, a , "@")}; !/^#/ && cnt[a[2]] {feature=a[2]"_"cnt[a[2]] ; cnt[a[2]]+=1}; !/^#/ && !cnt[a[2]] { feature=a[2] ; cnt[a[2]]+=1 } ;  !/^#/ {split($9, b, "Saa_6009_C1\.") ; split(b[2], c, ";") ; print $1 "\t" $3 "\texon\t" $4 "\t" $5 "\t" $6 "\t" $7 "\t" $8 "\tgene_name @" feature "@; gene_id @" c[1] "@;" }' | sed 's/@/"/g' | sed 's/"_/"feature_/g'  > Sa_JKD6009_ratt_checked.gff
+pyCheckGTFfile.py --gtf=Sa_JKD6009_ratt_checked.gff -o Sa_JKD6009_ratt_pyCRAC.gff

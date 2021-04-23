@@ -1,0 +1,191 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r include = FALSE}
+## Load libraries 
+if(!require(pacman)) {
+  install.packages("pacman")
+  library(pacman)
+}
+
+p_load(tidyverse)
+p_load(vroom)
+p_load(stringr)
+p_load(here)
+p_load(igraph)
+p_load(magrittr)
+
+p_load(Biostrings)
+p_load(rtracklayer )
+p_load(furrr)
+
+```
+
+
+```{r include = FALSE}
+## Directories Management
+base_dir <-  here::here() 
+data_dir <- file.path( base_dir, "Data")
+results_dir <- file.path(base_dir, "Results")
+source_dir <- file.path(base_dir, "Source")
+hyb_p_val_dir <- file.path( results_dir, "Hybrids_P_Values")
+
+dataset_type <-    "JT_SM"   #  "SM_Only" # "JT_Only" #
+
+merged_hyb_p_val_dir <- file.path( results_dir, "Merged_Hybrids_P_Values", dataset_type)
+
+source( file.path( source_dir, "Common", "common_functions.R") ) 
+
+create_dir_if_not_exists(merged_hyb_p_val_dir )
+
+```
+
+
+knitr::purl( file.path( source_dir, "Demultiplex", "scripts", "annotation.Rmd"),
+output=file.path( source_dir,  "Demultiplex",  "scripts",  "annotation.R"))
+                                               
+
+
+```{r}
+# hyb_file <- "/home/ignatius/PostDoc/2020/StaphCLASH2020/Results/Hybrids_Merged/DM_MiSeq/all_NNNCACTAGC_L5Bc_rnc-HTF_1.compressed.pyCRAC_comp_Sa_JKD6009_hybrids.merged.hyb"
+# 
+# gtf_file <- "/home/ignatius/PostDoc/2020/StaphCLASH2020/Data/Genomic/JKD6009/Annotation/Hyb_pyCRAC/compiled_edited_features.gtf"
+# 
+# rna_type_file <- "/home/ignatius/PostDoc/2020/StaphCLASH2020/Data/Genomic/JKD6009/Annotation/Hyb_pyCRAC/rna_type_priority.tab"
+
+hyb_file <- snakemake@input[["HYB_FILE"]]
+gtf_file <- snakemake@input[["GTF_FILE"]]
+rna_type_file <- snakemake@input[["RNA_TYPE_FILE"]]
+output_file <- snakemake@output[["hyb_annot_output"]]
+```
+
+
+# Format Hyb output
+```{r}
+
+
+hyb_tbl <- vroom::vroom( hyb_file, col_names = FALSE)
+
+hyb_colnames <- c(
+"left_hyb_id",
+"hyb_seq",
+"binding_energy",
+"left_chromo",	"left_read_start", "left_read_stop",	"left_genomic_start",	"left_genomic_stop",	"left_strand"	,
+
+
+"right_chromo",	"right_read_start", "right_read_stop",	"right_genomic_start",	"right_genomic_stop",	"right_strand",
+"optional_text"
+)
+
+# Column 1, unique sequence identifier.
+# Column 2, read sequence (truncated here for clarity).
+# Column 3, predicted binding energy in kcal/mol.
+# Columns 4–9, mapping information for first fragment of read: name of matched transcript, coordinates in read, coordinates in transcript, mapping score.
+# Columns 10–15, mapping information for second fragment of read.
+# Column 16 (optional, not shown here), list of annotations in the format: ‘‘feature1=value1; feature2=value2;..."
+
+colnames( hyb_tbl ) <- hyb_colnames
+
+# hyb_tbl
+
+```
+
+
+
+
+```{r}
+gff_obj <- import.gff2(gtf_file)
+
+gff_tbl <- as.data.frame( gff_obj )
+
+# "_" in hyb file converted to "-"
+
+
+rna_coordinates <- gff_tbl %>%
+  mutate( seqnames = as.character(seqnames),
+          type = as.character( type)) %>%
+  mutate( feature_name = pmap_chr( list( seqnames, gene_id,  transcript_id, type ), ~paste0(c(..1, ..2, ..3, ..4), collapse="|")      )) %>%
+  dplyr::select ( seqnames, start, end, width, strand, feature_name, type) %>%
+  dplyr::rename( feature_chromosome = "seqnames",
+                 feature_start = "start", 
+                 feature_end = "end",
+                 feature_strand = "strand",
+                 feature_type  = "type" )
+
+## substitute into column 4 and column 10
+
+
+gff_tbl %>%
+  distinct( type)
+
+```
+
+```{r}
+rna_type_tbl <- vroom::vroom( rna_type_file )
+```
+
+```{r}
+feature_overlap <- function( chromosome, start, end, feature_table, rna_type_priority) {
+  
+   merged_table <- feature_table %>%
+    dplyr::filter(  feature_chromosome == chromosome ) %>%
+    dplyr::filter ( map2_lgl( feature_start, feature_end, ~between( start, .x, .y) ) |
+                    map2_lgl( feature_start, feature_end, ~between( end, .x, .y)  ) )  %>%
+    left_join( rna_type_priority, by=c("feature_type" = "rna_type"))  %>%
+    dplyr::select( feature_name, rank)
+   
+    min_rank <- merged_table %>%
+      group_by(rank) %>%
+      summarise( feature_name = paste0(feature_name, collapse="")) %>%
+      ungroup() %>%
+      summarise ( rank = min(rank)) 
+
+    output_table <- merged_table %>%
+      dplyr::inner_join( min_rank, by =c("rank" = "rank")) %>%
+      dplyr::pull( feature_name) %>% .[[1]]
+    
+   if ( length( output_table) == 0 ) {
+     return ( "unknown" )
+   }
+  
+   return( output_table)
+}
+```
+
+```{r, exclude = TRUE}
+feature_overlap( "Saa_6009_C1", 1670, 1690, rna_coordinates, rna_type_tbl )
+```
+
+
+```{r}
+
+feature_overlap_partial <- partial( feature_overlap, feature_table = rna_coordinates, rna_type_priority=rna_type_tbl)
+
+hyb_tbl_merged <-  hyb_tbl %>% 
+  mutate( left_feature = future_pmap_chr( list( left_chromo, left_genomic_start, left_genomic_stop), ~ feature_overlap_partial(..1, ..2, ..3)   ) ) %>%
+  mutate( right_feature = future_pmap_chr( list( right_chromo, right_genomic_start, right_genomic_stop), ~ feature_overlap_partial(..1, ..2, ..3)   ) ) 
+```
+
+
+
+```{r}
+hyb_tbl_final <- hyb_tbl_merged %>%
+  dplyr::select(one_of( c(
+"left_hyb_id",
+"hyb_seq",
+"binding_energy",
+"left_feature",
+"left_read_start", "left_read_stop",	"left_genomic_start",	"left_genomic_stop",	"left_strand"	,
+"right_feature",
+"right_read_start", "right_read_stop",	"right_genomic_start",	"right_genomic_stop",	"right_strand",
+"optional_text" )))
+```
+
+
+
+```{r}
+vroom::vroom_write( hyb_tbl_final, col_names=FALSE, path=output_file ) 
+```
+

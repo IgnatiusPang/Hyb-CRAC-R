@@ -1,0 +1,294 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+```{r include = FALSE}
+## Load libraries 
+if(!require(pacman)) {
+  install.packages("pacman")
+  library(pacman)
+}
+
+p_load(tidyverse)
+p_load(vroom)
+p_load(stringr)
+p_load(here)
+p_load(igraph)
+p_load(magrittr)
+
+```
+
+```{r include = FALSE}
+## Directories Management
+base_dir <-  here::here() 
+data_dir <- file.path( base_dir, "Data")
+results_dir <- file.path(base_dir, "Results")
+source_dir <- file.path(base_dir, "Source")
+hyb_p_val_dir <- file.path( results_dir, "Hybrids_P_Values")
+merged_hyb_p_val_dir <- file.path( results_dir, "Merged_Hybrids_P_Values")
+summary_tables_dir <- file.path( results_dir, "Hybrids_Summary_Tables")
+
+source( file.path( source_dir, "Common", "common_functions.R") ) 
+
+create_dir_if_not_exists(merged_hyb_p_val_dir )
+
+```
+
+## Parameters 
+```{r}
+# remove hybrids where the two halfs are within threshold distance of nucleotides apart of each other
+threshold_distance_apart <- 100
+```
+
+```{r}
+
+naming_in_order <- c( "DM_MiSeq_Bc", 
+                            "DM_MiSeq_Bd", 
+                            "DM_NextSeq_Bc",
+                            "DM_NextSeq_Bd",
+                            "JW_BC1_Ab",
+                            "JW_BC1_Bc",
+                            "JW_BC1_Ac",
+                            "JW_BC4_Bc", 
+                      "SM1_RPMI", 
+                      "SM1_TSB",
+                      "SM2_TSB",
+                      "SM2_RPMI_0",
+                      "SM2_RPMI_60", 
+                      "SM2_RPMI_120", 
+                      "SM3_RPMI",
+                      "SM3_TSB")
+
+
+list_of_unique_files <- list( 
+  file.path( hyb_p_val_dir, "DM_MiSeq", "all_NNNCACTAGC_L5Bc_rnc-HTF_1.unique.hyb.p_values.tab" ),
+  file.path( hyb_p_val_dir, "DM_MiSeq", "all_NNNTCTCTAGC_L5Bd_rnc-HTF_2.unique.hyb.p_values.tab" ),
+  file.path( hyb_p_val_dir, "DM_NextSeq", "all_NNNCACTAGC_L5Bc_rnc-HTF_1.unique.hyb.p_values.tab" ),
+  file.path( hyb_p_val_dir, "DM_NextSeq", "all_NNNTCTCTAGC_L5Bd_rnc-HTF_2.unique.hyb.p_values.tab" ),
+  file.path( hyb_p_val_dir, "JW_BC1", "all_NNNATTAGC_L5Ab_BC1_rnc-HTF_1.unique.hyb.p_values.tab" ),
+  file.path( hyb_p_val_dir, "JW_BC1", "all_NNNCACTAGC_L5Bc_BC1_rnc-HTF_3.unique.hyb.p_values.tab" ),
+  file.path( hyb_p_val_dir, "JW_BC1", "all_NNNGCGCAGC_L5Ac_BC1_rnc-HTF-2.unique.hyb.p_values.tab" ),
+  file.path( hyb_p_val_dir, "JW_BC4", "all_NNNCACTAGC_L5Bc_BC4_rnc-HTF_4.unique.hyb.p_values.tab" ),
+  file.path( hyb_p_val_dir, "SM1", "all_NNNACAGTG_RNaseIII_RPMI.unique.hyb.p_values.tab" ),
+  file.path( hyb_p_val_dir, "SM1", "all_NNNTGTCAC_RNaseIII_TSB.unique.hyb.p_values.tab" ),
+  file.path( hyb_p_val_dir, "SM2", "all_NNNCGTGAT_RNase_III_TSB.unique.hyb.p_values.tab" ),
+  file.path( hyb_p_val_dir, "SM2", "all_NNNGCACTA_RNase_III_RPMI_0_ligation.unique.hyb.p_values.tab" ),
+  file.path( hyb_p_val_dir, "SM2", "all_NNNTAGTGC_RNase_III_RPMI_60_ligation.unique.hyb.p_values.tab" ),
+  file.path( hyb_p_val_dir, "SM2", "all_NNNATCACG_RNase_III_RPMI_120_ligation.unique.hyb.p_values.tab" ),
+  file.path( hyb_p_val_dir, "SM3", "all_NNNATCACG_RNaseIII_RPMI.unique.hyb.p_values.tab" ),
+  file.path( hyb_p_val_dir, "SM3", "all_NNNTAGTGC_RNaseIII_TSB.unique.hyb.p_values.tab" ) )
+
+names(list_of_unique_files ) <- naming_in_order
+
+list_of_multimapped_files <- list( 
+  file.path( hyb_p_val_dir, "DM_MiSeq", "all_NNNCACTAGC_L5Bc_rnc-HTF_1.multimapped.hyb.p_values.tab" ),
+  file.path( hyb_p_val_dir, "DM_MiSeq", "all_NNNTCTCTAGC_L5Bd_rnc-HTF_2.multimapped.hyb.p_values.tab" ),
+  file.path( hyb_p_val_dir, "DM_NextSeq", "all_NNNCACTAGC_L5Bc_rnc-HTF_1.multimapped.hyb.p_values.tab" ),
+  file.path( hyb_p_val_dir, "DM_NextSeq", "all_NNNTCTCTAGC_L5Bd_rnc-HTF_2.multimapped.hyb.p_values.tab" ),
+  file.path( hyb_p_val_dir, "JW_BC1", "all_NNNATTAGC_L5Ab_BC1_rnc-HTF_1.multimapped.hyb.p_values.tab" ),
+  file.path( hyb_p_val_dir, "JW_BC1", "all_NNNCACTAGC_L5Bc_BC1_rnc-HTF_3.multimapped.hyb.p_values.tab" ),
+  file.path( hyb_p_val_dir, "JW_BC1", "all_NNNGCGCAGC_L5Ac_BC1_rnc-HTF-2.multimapped.hyb.p_values.tab" ),
+  file.path( hyb_p_val_dir, "JW_BC4", "all_NNNCACTAGC_L5Bc_BC4_rnc-HTF_4.multimapped.hyb.p_values.tab" ),  
+  file.path( hyb_p_val_dir, "SM1", "all_NNNACAGTG_RNaseIII_RPMI.multimapped.hyb.p_values.tab" ),
+  file.path( hyb_p_val_dir, "SM1", "all_NNNTGTCAC_RNaseIII_TSB.multimapped.hyb.p_values.tab" ),
+  file.path( hyb_p_val_dir, "SM2", "all_NNNATCACG_RNase_III_RPMI_120_ligation.multimapped.hyb.p_values.tab" ),
+  file.path( hyb_p_val_dir, "SM2", "all_NNNCGTGAT_RNase_III_TSB.multimapped.hyb.p_values.tab" ),
+  file.path( hyb_p_val_dir, "SM2", "all_NNNGCACTA_RNase_III_RPMI_0_ligation.multimapped.hyb.p_values.tab" ),
+  file.path( hyb_p_val_dir, "SM2", "all_NNNTAGTGC_RNase_III_RPMI_60_ligation.multimapped.hyb.p_values.tab" ),
+  file.path( hyb_p_val_dir, "SM3", "all_NNNATCACG_RNaseIII_RPMI.multimapped.hyb.p_values.tab" ),
+  file.path( hyb_p_val_dir, "SM3", "all_NNNTAGTGC_RNaseIII_TSB.multimapped.hyb.p_values.tab" ) )
+
+
+
+names(list_of_multimapped_files ) <- naming_in_order
+
+
+merged_p_values_file <- file.path( merged_hyb_p_val_dir, "JT_Only", "merged_p_values_results.tab") 
+
+
+```
+
+
+## Bind unique interactions
+```{r}
+
+
+list_of_unique_tables <- purrr::map( list_of_unique_files, vroom::vroom )
+
+names( list_of_unique_tables) <- names( list_of_unique_files)
+
+
+all_unique_hybrids_tbl <-  list_of_unique_tables %>%
+                bind_rows(.id="Experiment_Name") %>%
+  # Need to add rule to remove hybrids where the two halfs are within 100 nt of each other
+  dplyr::filter(  
+      abs( left_genomic_start -  right_genomic_start ) > threshold_distance_apart &
+      abs( left_genomic_start -  right_genomic_stop ) > threshold_distance_apart &
+      abs( left_genomic_stop -  right_genomic_start ) > threshold_distance_apart &
+      abs( left_genomic_stop -  right_genomic_stop ) > threshold_distance_apart  )
+
+```
+
+### Bind multimapped interactions 
+```{r}
+list_of_multimapped_tables <- purrr::map( list_of_multimapped_files, vroom::vroom )
+
+names( list_of_multimapped_tables) <- names( list_of_multimapped_files)
+
+
+all_multimapped_hybrids_tbl <-  list_of_multimapped_tables %>%
+                bind_rows(.id="Experiment_Name") %>%
+  # Need to add rule to remove hybrids where the two halfs are within 100 nt of each other
+  dplyr::filter(  
+      abs( left_genomic_start -  right_genomic_start ) > threshold_distance_apart &
+      abs( left_genomic_start -  right_genomic_stop ) > threshold_distance_apart &
+      abs( left_genomic_stop -  right_genomic_start ) > threshold_distance_apart &
+      abs( left_genomic_stop -  right_genomic_stop ) > threshold_distance_apart  )
+```
+
+
+## Count the RNA classes of each type of RNA-RNA pairs. Put results into a long format table.
+```{r}
+
+count_hybrid_rna_class <- function( input_hybrids_tbl) {
+  hybrids_count_by_type <-  input_hybrids_tbl %>%
+  group_by(Experiment_Name, left_rna_class, right_rna_class) %>%
+  summarise( counts = n()) %>%
+  ungroup()
+
+
+hybrids_count_part_a <- hybrids_count_by_type %>%
+  dplyr::filter( left_rna_class >= right_rna_class)
+
+hybrids_count_part_b <- hybrids_count_by_type %>%
+  dplyr::filter( left_rna_class < right_rna_class) %>%
+  dplyr::rename ( temp_rna_class = "left_rna_class") %>%
+  dplyr::rename ( left_rna_class = "right_rna_class") %>%
+  dplyr::rename( right_rna_class = "temp_rna_class") %>%
+  dplyr::select( Experiment_Name, left_rna_class, right_rna_class, counts )
+
+final_counts <-  hybrids_count_part_a %>%
+  bind_rows( hybrids_count_part_b ) %>%
+  group_by( Experiment_Name, left_rna_class, right_rna_class ) %>%
+  summarise( counts = sum(counts)) %>%
+  ungroup()
+
+ return( final_counts)
+  
+  
+}
+```
+
+## Count the RNA classes of each type of RNA-RNA pairs. Put results into a wide format table. Include a totals columnn. 
+```{r}
+
+pivoted_counts_table <- function( input_table) {
+  
+  long_counts_table <- count_hybrid_rna_class( input_table ) 
+  
+  wide_counts_table <- long_counts_table %>%
+  pivot_wider( names_from="Experiment_Name",
+               values_from = "counts")
+  
+  total_table <- long_counts_table %>%
+  group_by(left_rna_class, right_rna_class) %>%
+  summarise( Total = sum(counts)) %>%
+  ungroup()
+  
+  summary_table <- wide_counts_table %>%
+    left_join( total_table, by=c("left_rna_class", "right_rna_class") )
+  
+  return( summary_table) 
+}
+
+
+```
+
+## Count the number of distinct hybrid IDs per experiment
+```{r}
+
+num_of_distinct_hybrid_ids_per_expt <- function(input_table) {
+  
+  num_hybrid_ids_tble <- input_table %>%
+  distinct( Experiment_Name, left_hyb_id) %>%
+  group_by( Experiment_Name) %>%
+  summarise( num_hybrid_ids = n()) %>%
+  ungroup()
+  
+  return(num_hybrid_ids_tble)
+  
+}
+
+```
+
+## Unique interactions 
+```{r}
+
+unique_hybs_rna_classes <- all_unique_hybrids_tbl %>%
+dplyr::filter( bh_adj_p_value < 0.05) %>%
+pivoted_counts_table
+
+vroom::vroom_write( unique_hybs_rna_classes, 
+              file.path( summary_tables_dir, "unique_hybs_rna_classes.tab" ))
+
+
+unique_hybs_num_ids <- all_unique_hybrids_tbl %>%
+dplyr::filter( bh_adj_p_value < 0.05) %>%
+num_of_distinct_hybrid_ids_per_expt
+
+
+vroom::vroom_write( unique_hybs_num_ids, 
+              file.path( summary_tables_dir, "unique_hybs_num_ids.tab" ))
+
+```
+
+## Multimapped Interactions
+```{r}
+
+multimapped_hybs_rna_classes <- all_multimapped_hybrids_tbl  %>%
+dplyr::filter( bh_adj_p_value < 0.05) %>%
+pivoted_counts_table
+
+
+vroom::vroom_write( multimapped_hybs_rna_classes, 
+              file.path( summary_tables_dir, "multimapped_hybs_rna_classes.tab" ))
+
+multimapped_hybs_num_ids <- all_multimapped_hybrids_tbl  %>%
+dplyr::filter( bh_adj_p_value < 0.05)%>%
+num_of_distinct_hybrid_ids_per_expt
+
+vroom::vroom_write( multimapped_hybs_num_ids, 
+              file.path( summary_tables_dir, "multimapped_hybs_num_ids.tab" ))
+
+```
+
+
+## Read Final interactions 
+
+```{r}
+
+merged_p_values_tbl  <-   vroom::vroom(merged_p_values_file)
+
+```
+
+```{r}
+
+all_cleaned_hybs_rna_classes <- merged_p_values_tbl  %>%
+dplyr::filter( merged_bh_adj_p_value < 0.05)  %>%
+pivoted_counts_table
+
+vroom::vroom_write( all_cleaned_hybs_rna_classes, 
+              file.path( summary_tables_dir, "all_cleaned_hybs_rna_classes.tab" ))
+
+all_cleaned_hybs_num_ids <- merged_p_values_tbl  %>%
+dplyr::filter( merged_bh_adj_p_value < 0.05)  %>%
+num_of_distinct_hybrid_ids_per_expt
+
+vroom::vroom_write( all_cleaned_hybs_num_ids, 
+              file.path( summary_tables_dir, "all_cleaned_hybs_num_ids.tab" ))
+
+```
+
+

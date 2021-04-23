@@ -1,0 +1,14 @@
+rank	rna_type
+1	CDS
+2	5UTR
+3	3UTR
+4	rRNA
+5	tRNA
+6	CRISPR
+7	pseudogene
+8	riboswitch
+9	Rnase_P_RNA
+10	RNA_termometer
+11	SRP_RNA
+12	tmRNA
+13	operon

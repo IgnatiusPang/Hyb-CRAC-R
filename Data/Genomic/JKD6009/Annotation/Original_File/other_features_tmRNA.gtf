@@ -1,0 +1,1 @@
+Saa_6009_C1	cmsearch	tmRNA	870753	871114	.	+	.	gene_id "rna-E0E12_RS04405"; transcript_id "rna-E0E12_RS04405"; rna_type "tmRNA";locus_tag "E0E12_RS04405";gene "ssrA";inference "COORDINATES: profile:INFERNAL:1.1.1";Parent "gene-E0E12_RS04405,Saa_6009_C1_transcript487";product "transfer-messenger RNA";gbkey "tmRNA";Dbxref "RFAM:RF00023";ID "rna-E0E12_RS04405";

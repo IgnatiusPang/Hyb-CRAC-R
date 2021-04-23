@@ -1,0 +1,128 @@
+{
+    "__default__":
+    {
+        "mem":"120gb",
+        "nodes":"1",
+        "ppn":"12",
+        "walltime": "12:00:00",
+        "email":"i.pang@unsw.edu.au",
+        "N":"Smk_Default"
+    },
+    "run_bbmerge":
+    {   
+        "N":"Smk_Bbmerge",
+        "walltime": "3:00:00"
+    },
+    "run_dmplx":
+    {
+        "N":"Smk_Dmltplx",
+        "nodes":"1",
+        "ppn":"1",
+        "mem":"10gb",
+        "walltime": "3:00:00"
+    },
+    "run_bbduk":
+    {
+        "N":"Smk_Bbduk",
+        "nodes":"1",
+        "ppn":"12",
+        "mem":"60gb",
+        "walltime": "3:00:00"       
+    },
+    "run_fastqc":  
+    {
+        "N":"Smk_FastQC",
+        "nodes":"1",
+        "ppn":"1",
+        "mem":"10gb",
+        "walltime": "1:00:00"  
+    },
+    "run_multiqc":  
+    {
+        "N":"Smk_MultiQC",
+        "nodes":"1",
+        "ppn":"1",
+        "mem":"10gb",
+        "walltime": "1:00:00"         
+        
+    },
+    "run_pcr_de_dup":
+    {
+        "N":"Smk_PCR_DeDup",
+        "nodes":"1",
+        "ppn":"1",
+        "mem":"10gb",
+        "walltime": "3:00:00"             
+    },
+    "run_hyb_detect":
+    {
+        "N":"Smk_HybDetect",
+        "nodes":"1",
+        "ppn":"1",
+        "mem":"10gb",
+        "walltime": "5:00:00"       
+    },
+    "run_hyb_merge":
+    {
+        "N":"Smk_HybMerge",
+        "nodes":"1",
+        "ppn":"1",
+        "mem":"10gb",
+        "walltime": "15:59:00"            
+        
+    },
+    "run_pyCRAC":
+    {
+        "N":"Smk_PyCRAC"
+    },
+    "run_sgr2pws":
+    {
+        "N":"Smk_Sgr2pws",
+        "nodes":"1",
+        "ppn":"1",
+        "mem":"10gb",
+        "walltime": "5:00:00"      
+    },
+    "run_annotation":
+    {
+        "N":"Smk_Annot",
+        "nodes":"1",
+        "ppn":"1",
+        "mem":"10gb",
+        "walltime": "1:00:00"          
+    },
+    "get_dataset_stats":    
+    {
+        "N":"Smk_Stats",
+        "nodes":"1",
+        "ppn":"1",
+        "mem":"10gb",
+        "walltime": "1:00:00"            
+    },
+    "get_max_reads":
+    {
+        "N":"Smk_MaxReads",
+        "nodes":"1",
+        "ppn":"1",
+        "mem":"10gb",
+        "walltime": "1:00:00"            
+        
+    },
+    "calc_hyb_p_val":
+    {
+         "N":"Smk_Calc_P_Val",
+        "nodes":"1",
+        "ppn":"1",
+        "mem":"10gb",
+        "walltime": "1:00:00"   
+        
+    },
+    "run_sep_unique_multimapped":
+    {
+        "N":"Smk_Sep_Unique",
+        "nodes":"1",
+        "ppn":"1",
+        "mem":"10gb",
+        "walltime": "1:00:00"           
+    }
+}

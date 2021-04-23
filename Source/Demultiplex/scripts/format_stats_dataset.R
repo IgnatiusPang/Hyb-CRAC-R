@@ -1,0 +1,193 @@
+## ----include = FALSE----------------------------------------------------------
+## Load libraries 
+if(!require(pacman)) {
+  install.packages("pacman")
+  library(pacman)
+}
+
+p_load(tidyverse)
+p_load(vroom)
+p_load(stringr)
+p_load(here)
+
+
+## ----include = FALSE----------------------------------------------------------
+## Directories Management
+base_dir <-  here::here() 
+data_dir <- file.path( base_dir, "Data")
+results_dir <- file.path(base_dir, "Results")
+source_dir <- file.path(base_dir, "Source")
+
+
+
+## -----------------------------------------------------------------------------
+
+input_files_list <- c( snakemake@input[["num_mapped_reads_files"]],
+                       snakemake@input[["hyb_files"]],
+                       snakemake@input[["pws_files"]] ) 
+
+datasets_file <-   snakemake@output[["dataset_stats_file"]] 
+
+
+
+
+## -----------------------------------------------------------------------------
+
+## Extract the different columns of the dataset.txt file 
+parse_file_name <- function( datasets,  input_file ) {
+  
+
+  if ( str_detect( input_file, "file_statistics_cDNAs.txt" ) )  {
+    
+      sample_id <-  str_match( input_file, ".*/all_(.*?)\\.")[1,2] 
+    
+
+              reads_mapped <-  parse_mapped_read_counts(input_file)
+      
+              datasets[sample_id, "reads_mapped"] <- reads_mapped
+      
+        
+  }  else if ( str_detect( input_file, ".hyb" ) ) {
+    
+     sample_id <- str_match( input_file, ".*/all_(.*?)\\.")[1,2] 
+     
+     hyb_file_name <- basename(input_file)
+     
+     datasets[sample_id, "hyb"] <- hyb_file_name
+     
+
+     
+  } else if ( str_detect( input_file, ".pws" ) ) {
+    
+     sample_id <- str_match( input_file, ".*/all_(.*?)\\.")[1,2] 
+     
+     pws_file_name <- basename(input_file)
+     
+     datasets[sample_id, "pws"] <- pws_file_name
+
+
+  }
+  
+  
+       return(datasets)
+
+}
+
+## Get the number of reads mapped
+parse_mapped_read_counts <- function( input_file ) {
+     lines_dat <- readLines(con = input_file)
+  
+     for ( line in lines_dat) {
+        if( str_detect( line, "# total number of mapped cDNAs:")) {
+        
+            num_mapped_reads <- str_extract( line, "\\d+" )
+          
+          return(num_mapped_reads)
+        }
+       
+     }
+     
+     return(NA)
+     
+}
+
+
+
+
+## -----------------------------------------------------------------------------
+
+get_dataset_stats <- function( list_of_files ) {
+  
+  sample_ids_list <- purrr::map_chr( list_of_files, 
+                                   ~str_match( ., ".*/all_(.*?)\\.")[1,2]   )  %>%
+  sort() %>%
+  unique()
+
+  all_datasets <- data.frame( matrix(NA, length(sample_ids_list ) , 3))
+  colnames( all_datasets) <- c( "hyb", "pws", "reads_mapped")
+  rownames( all_datasets ) <- sample_ids_list
+  
+  all_datasets <- reduce( .x=list_of_files, 
+                          .f=parse_file_name, 
+                          .init=all_datasets )
+  
+  return( all_datasets  )
+}
+
+
+
+
+
+## -----------------------------------------------------------------------------
+print(paste("Dataset file:", datasets_file))
+
+datasets_table <- get_dataset_stats(input_files_list)
+
+
+if( length(input_files_list) == 0 ) {
+     stop( "No input files available")
+}
+
+if ( is.na( datasets_file) ) {
+   stop( "datasets.txt file is not in the input arguments list.")
+}
+
+vroom::vroom_write( datasets_table,
+                    path= datasets_file ,
+                    col_names=FALSE )
+
+
+# write.table( data.frame(matrix(0, 3, 3)),
+#                     file= datasets_file ,
+#              quote=FALSE,
+#              sep="\t",
+#              na="",
+#              row.names=FALSE,
+#              col.names=FALSE )
+
+
+## ----eval=FALSE---------------------------------------------------------------
+## 
+## 
+## input_file_stats <- "/home/ignatius/PostDoc/2020/StaphCLASH2020/Results/Test_Hyb/all_NNNTCTCTAGC_L5Bd_rnc-HTF_2.trimmed.pyCRAC_trimmed_blocks_nomuts_file_statistics_cDNAs.txt"
+## 
+## input_file_hyb <- "Hyb_Annot/all_NNNTCTCTAGC_L5Bd_rnc-HTF_2.compressed.pyCRAC_comp_Sa_JKD6009_hybrids_annot.hyb"
+## 
+## input_file_pws <- "pyCRAC/all_NNNTCTCTAGC_L5Bd_rnc-HTF_2/pws_files/all_NNNTCTCTAGC_L5Bd_rnc-HTF_2.pws"
+## 
+## 
+## list_of_files <- c( input_file_hyb, input_file_pws , input_file_stats)
+## 
+## ## Test get mapped read counts
+## parse_mapped_read_counts(input_file_stats)
+## 
+## ## Test parse file name
+## sample_ids_list <- purrr::map_chr( list_of_files,
+##                                    ~str_match( ., ".*/all_(.*?)\\.")[1,2]   )  %>%
+##   sort() %>%
+##   unique()
+## 
+## all_datasets <- data.frame( matrix(NA, length(sample_ids_list ) , 3))
+## colnames( all_datasets) <- c( "hyb", "pws", "reads_mapped")
+## rownames( all_datasets ) <- sample_ids_list
+## 
+## parse_file_name (  all_datasets, input_file )
+## 
+## 
+## ## Test getting the barcode / sample ID
+## sample_id_stats <- str_match( input_file_stats, ".*/all_(.*?)\\.")[1,2]
+## sample_id_hyb <- str_match( input_file_hyb, ".*/all_(.*?)\\.")[1,2]
+## sample_id_pws <- str_match( input_file_pws, ".*/all_(.*?)\\.")[1,2]
+## 
+## sample_id_stats
+## sample_id_hyb
+## sample_id_pws
+## 
+## ### Test whole function
+## datasets_table <- get_dataset_stats(list_of_files)
+## 
+## 
+## vroom::vroom_write( datasets_table,
+##                     path="datasets.txt",
+##                     col_names=FALSE )
+
