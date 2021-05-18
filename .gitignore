@@ -40,31 +40,10 @@ vignettes/*.pdf
 
 
 # Directories
-Data/dRNA-Seq
-Data/E_coli_RNaseE_data
-Data/EHEC
-Data/filtering_stats.zip
-Data/Gene_Ontology
-Data/GEO
-Data/Howden_RNA_Seq
-Data/Legacy_Network
-Data/Ortholog
-Data/RDS
-Data/RNA_Seq
-Data/SAFE
-Data/Term_Seq
-Data/ANNOgesic
 
-
-Results
-Test_Packages
-Notes/PBS_Outputs
 
 # Files
-*.xlsx
-*.gz
-*.tgz
-*.tar
+
 
 
 
