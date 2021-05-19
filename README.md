@@ -167,7 +167,7 @@ deactivate
 
 # Usage Notes:
 
-## Run Novoindex to create an index for novoaligner:
+## Run Novoindex to create an index for NovoAligner:
 ```{r}
 ./novoindex Hyb-CRAC-R/Data/Genomic/JKD6009/Sa_JKD6009.nix \
   Hyb-CRAC-R/Data/Genomic/JKD6009/Sa_JKD6009.fasta
@@ -178,10 +178,22 @@ deactivate
 * To run an example analysis, we have to do the following: 
 
 1. Open the Snakemake file "Source/Demultiplex/Script_Per_Dataset/dm_miseq_github.smk", change the necessary parameters inside this file.
+
 2. Inside this file change the CRAC_ENVIRONMENT_ACTIVATE variable to point to your installation of the pyCRAC installation:   (For example: CRAC_ENVIRONMENT_ACTIVATE=/srv/scratch/z1234567/my_python_dir/my_python_env/bin/activate) 
 3. The file "Source/Demultiplex/Script_Per_Dataset/run_smk_dm_miseq_github.sh" contains the script that runs the snakemake command. Remove any 'module' command if needed. Configure the snakemake command parameters (e.g. remove the --cluster-config and --cluster parameter if not using PBS queue, remove the --use-envmodules parameter if not using any PBS 'module'.)
+
 4. The "Source/Demultiplex/Script_Per_Dataset/common_rules.smk" file contains other snakemake rules. Remove any 'module' command if needed. Correct the path to executables and referenced scripts as required. 
+
 5. Run the script "bash Source/Demultiplex/Script_Per_Dataset/run_smk_dm_miseq_github.sh"
+
 6. Reference sequences such as Barcodes and Adaptors are included in the folder (Hyb-CRAC-R/Data/Ref_Seq)
+
 7. For more information on how to run the analysis please see the following set of slides: "Hyb-CRAC-R usage information.pdf"
-8. Good luck!
+
+
+## Contact Us
+Please contact Ignatius Pang (ipang [at] cmri.org.au) if you have any questions or queries on the above instructions. Otherwise, please feel free to leave questions as a GitHub issues above. 
+
+
+
+
