@@ -8,6 +8,15 @@ This repository is https://github.com/IgnatiusPang/Hyb-CRAC-R
 
 # Installation of Software Prerequisites
 
+## R Installation
+Please ollow installation instructions in this website: https://cran.r-project.org/
+
+## Python Installation
+Please ollow installation instructions in this website: https://realpython.com/installing-python/
+
+## Snakemake Installation
+Please ollow installation instructions in this website: https://snakemake.readthedocs.io/en/stable/getting_started/installation.html
+
 ## bbtools
 To install bbmerge with conda run:
 ```{bash}
