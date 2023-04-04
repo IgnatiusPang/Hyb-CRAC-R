@@ -5,7 +5,6 @@ output:
     df_print: paged
 ---
 
-
 ```{r include = FALSE}
 ## Load libraries 
 if(!require(pacman)) {
@@ -23,19 +22,19 @@ p_load(magrittr)
 ```
 
 
-
-
 ```{r include = FALSE}
 ## Directories Management
 base_dir <-  here::here() 
 data_dir <- file.path( base_dir, "Data")
 results_dir <- file.path(base_dir, "Results")
 source_dir <- file.path(base_dir, "Source")
-hyb_p_val_dir <- file.path( results_dir,  "E_coli_UPEC", "Hybrids_P_Values")
+# hyb_p_val_dir <- file.path( results_dir,  "E_coli_UPEC", "Hybrids_P_Values")
+hyb_p_val_dir <- file.path( "/home/ignatius/ownCloud/Shared/E_coli_UPEC_Hfq/RNA-RNA_interaction_analysis_(hyb)/BC1_BC2_Processed_Data")
 
+ 
 dataset_type <-    "UPEC"   #  "SM_Only" # "JT_Only" #
 
-merged_hyb_p_val_dir <- file.path( results_dir,  "E_coli_UPEC",  "Merged_Hybrids_P_Values", dataset_type)
+merged_hyb_p_val_dir <- file.path( results_dir,  "E_coli_UPEC",  "Merged_Hybrids_P_Values_Jul_2021", dataset_type)
 
 source( file.path( source_dir, "Common", "common_functions.R") ) 
 
@@ -59,6 +58,9 @@ threshold_distance_apart <- 100
 # Parameters for grouping genomic start sites to speed up comparisons
 grouping_size <- 500
 grouping_adjust <- 250
+
+# Cluster total left and right half distance
+cluster_max_distance <- 600
 ```
 
 
@@ -314,7 +316,7 @@ different_direction_compare_simple <- different_direction_compare %>%
   collect()
 ```
 
-
+## Create a network, find connected components
 ```{r}
 group_hybrids_tbl <- same_direction_compare_simple %>%
   bind_rows( different_direction_compare_simple) %>%
@@ -507,7 +509,7 @@ colnames( clean_pos_same_dir)
 #  "right_strand"        "left_genomic_start"  "left_genomic_stop"   "right_genomic_start" "rigth_genomic_stop" 
 
 
-## get together the hybrids that were found in multiple experiments, overlapping in the same direciton, or overlappin in different direction
+## get together the hybrids that were found in multiple experiments, overlapping in the same direction, or overlapping in different direction
 combined_data <- clean_pos_same_dir %>%
   mutate( direction = "Same" ) %>%
   bind_rows(clean_pos_diff_dir %>%
@@ -568,18 +570,30 @@ cln_merged_positions_tbl <- part_a_combined_data %>%
           left_name = make_array_into_string(left_name) ,
           right_rna_class = make_array_into_string(right_rna_class) ,
           right_name = make_array_into_string(right_name)     )
-  
-cln_merged_positions_tbl
-
 ```
 
+## Find clusters where the distance covered by the two halfs are too long
+```{r}
+cluster_id_tbl_to_update <- cln_merged_positions_tbl %>%
+  dplyr::mutate( left_len = abs(left_genomic_start - left_genomic_stop ) + 1 )  %>%
+  dplyr::mutate( right_len = abs(right_genomic_start - right_genomic_stop) + 1 ) %>%
+  dplyr::filter( left_len + right_len > cluster_max_distance ) %>%
+  dplyr::select( cluster_id) %>%
+  dplyr::inner_join( cluster_id_tbl, by = "cluster_id") %>%
+  mutate( new_cluster_id = paste( cluster_id, row_number(), sep="_"  ) )
 
+## Remove clusters that have regions that were too long
+cluster_id_tbl_updated <- cluster_id_tbl %>%
+  left_join( cluster_id_tbl_to_update, by=c("expt_hyb_id", "cluster_id")) %>%
+  dplyr::filter( is.na( new_cluster_id)) %>%
+  dplyr::select(-new_cluster_id)
 
+```
 
 ## Calculate updated p-value
 ```{r}
 merged_p_value <- filtered_tbl %>%
-  inner_join(cluster_id_tbl , by=c( "expt_hyb_id" = "expt_hyb_id")) %>%
+  inner_join(cluster_id_tbl_updated , by=c( "expt_hyb_id" = "expt_hyb_id")) %>%
   dplyr::select( cluster_id,  Experiment_Name,  expt_hyb_id,left_hyb_id, p_value, total_hybrids ) %>%
   arrange( cluster_id, Experiment_Name, expt_hyb_id, left_hyb_id, p_value) %>%
   group_by( cluster_id, Experiment_Name ) %>%
@@ -617,13 +631,13 @@ merged_p_value_and_positions <- cln_merged_positions_tbl %>%
 
 ## hybrids that did not have common hybrids in multiple experiments and therefore were non-merged
 non_merged_rows <- filtered_tbl %>%
-  anti_join( cluster_id_tbl, by=c("expt_hyb_id")) %>%
+  anti_join( cluster_id_tbl_updated, by=c("expt_hyb_id")) %>%
   mutate( combined_p_value  = p_value)
 
 
 ## Rows that were merged, output them as a separate file for tracking back the calculations
 merged_rows_before_merge <- filtered_tbl %>%
-  inner_join( cluster_id_tbl, by=c("expt_hyb_id")) %>%
+  inner_join( cluster_id_tbl_updated, by=c("expt_hyb_id")) %>%
   mutate( combined_p_value  = p_value) %>%
   dplyr::select( one_of( c("cluster_id", colnames(filtered_tbl), "combined_p_value"))) %>%
   arrange(cluster_id, expt_hyb_id)
@@ -653,6 +667,12 @@ vroom::vroom_write(filtered_final_table, file.path( merged_hyb_p_val_dir, "filte
 
 ```
 
+```{r}
+filtered_final_table %>%
+  dplyr::filter( str_detect(left_hyb_id, "cluster" )) %>%
+  dplyr::mutate( total_len = abs( left_genomic_start - left_genomic_stop ) + 1 + abs( right_genomic_start - right_genomic_stop ) + 1) %>%
+  dplyr::filter( total_len >  cluster_max_distance)
+```
 
 
 ```{r}

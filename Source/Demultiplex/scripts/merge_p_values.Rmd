@@ -31,7 +31,7 @@ results_dir <- file.path(base_dir, "Results")
 source_dir <- file.path(base_dir, "Source")
 hyb_p_val_dir <- file.path( results_dir, "Hybrids_P_Values")
 
-dataset_type <-    "JT_SM"   #  "SM_Only" # "JT_Only" #
+dataset_type <-    "JT_SM_20201011"   #  "SM_Only" # "JT_Only" #
 
 merged_hyb_p_val_dir <- file.path( results_dir, "Merged_Hybrids_P_Values", dataset_type)
 
@@ -49,37 +49,10 @@ nohup Rscript --vanilla  merge_p_values_upec.R > run_merge_p_values_upec_${DATE}
 
 
 
-## Parameters 
 ```{r}
-# remove hybrids where the two halfs are within threshold distance of nucleotides apart of each other
-threshold_distance_apart <- 100
+ list_of_files <- Sys.glob( "/media/ignatius/Dinosaur/Winton_CLASH/*/Processed_Data/Hyb_Annot/all_*.unique.hyb.p_values.tab" ) %>%
+  discard( ~str_detect(. ,"control" ) )
 
-# Parameters for grouping genomic start sites to speed up comparisons
-grouping_size <- 500
-grouping_adjust <- 250
-```
-
-
-## List of all input files 
-
-```{r}
-list_of_files <- list( 
-  file.path( hyb_p_val_dir, "DM_MiSeq", "all_NNNCACTAGC_L5Bc_rnc-HTF_1.unique.hyb.p_values.tab" ),
-  file.path( hyb_p_val_dir, "DM_MiSeq", "all_NNNTCTCTAGC_L5Bd_rnc-HTF_2.unique.hyb.p_values.tab" ),
-  file.path( hyb_p_val_dir, "DM_NextSeq", "all_NNNCACTAGC_L5Bc_rnc-HTF_1.unique.hyb.p_values.tab" ),
-  file.path( hyb_p_val_dir, "DM_NextSeq", "all_NNNTCTCTAGC_L5Bd_rnc-HTF_2.unique.hyb.p_values.tab" ),
-  file.path( hyb_p_val_dir, "JW_BC1", "all_NNNATTAGC_L5Ab_BC1_rnc-HTF_1.unique.hyb.p_values.tab" ),
-  file.path( hyb_p_val_dir, "JW_BC1", "all_NNNCACTAGC_L5Bc_BC1_rnc-HTF_3.unique.hyb.p_values.tab" ),
-  file.path( hyb_p_val_dir, "JW_BC1", "all_NNNGCGCAGC_L5Ac_BC1_rnc-HTF-2.unique.hyb.p_values.tab" ),
-  file.path( hyb_p_val_dir, "JW_BC4", "all_NNNCACTAGC_L5Bc_BC4_rnc-HTF_4.unique.hyb.p_values.tab" ),
-  file.path( hyb_p_val_dir, "SM1", "all_NNNTGTCAC_RNaseIII_TSB.unique.hyb.p_values.tab" ),
-  file.path( hyb_p_val_dir, "SM1", "all_NNNACAGTG_RNaseIII_RPMI.unique.hyb.p_values.tab" ),
-  file.path( hyb_p_val_dir, "SM2", "all_NNNCGTGAT_RNase_III_TSB.unique.hyb.p_values.tab" ),
-  file.path( hyb_p_val_dir, "SM2", "all_NNNGCACTA_RNase_III_RPMI_0_ligation.unique.hyb.p_values.tab" ),
-  file.path( hyb_p_val_dir, "SM2", "all_NNNTAGTGC_RNase_III_RPMI_60_ligation.unique.hyb.p_values.tab" ),
-  file.path( hyb_p_val_dir, "SM2", "all_NNNATCACG_RNase_III_RPMI_120_ligation.unique.hyb.p_values.tab" ),
-  file.path( hyb_p_val_dir, "SM3", "all_NNNTAGTGC_RNaseIII_TSB.unique.hyb.p_values.tab" ),
-  file.path( hyb_p_val_dir, "SM3", "all_NNNATCACG_RNaseIII_RPMI.unique.hyb.p_values.tab" )  ) 
 
 names(list_of_files ) <- c( "DM_MiSeq_Bc", 
                             "DM_MiSeq_Bd", 
@@ -89,14 +62,69 @@ names(list_of_files ) <- c( "DM_MiSeq_Bc",
                             "JW_BC1_Bc",
                             "JW_BC1_Ac",
                             "JW_BC4_Bc",
-                            "SM1_TSB",
                             "SM1_RPMI",
+                            "SM1_TSB",
+                            "SM2_RPMI_120",                    
                             "SM2_TSB",
                             "SM2_RPMI_0",
-                            "SM2_RPMI_60",
-                            "SM2_RPMI_120",                    
-                            "SM3_TSB",                            
-                            "SM3_RPMI" )
+                            "SM2_RPMI_60",                            
+                            "SM3_RPMI",
+                            "SM3_TSB" )
+
+```
+
+
+## Parameters 
+```{r}
+# remove hybrids where the two halfs are within threshold distance of nucleotides apart of each other
+threshold_distance_apart <- 100
+
+# Parameters for grouping genomic start sites to speed up comparisons
+grouping_size <- 500
+grouping_adjust <- 250
+
+# Cluster total left and right half distance
+cluster_max_distance <- 600
+```
+
+
+## List of all input files 
+
+```{r}
+# list_of_files <- list( 
+#   file.path( hyb_p_val_dir, "DM_MiSeq", "all_NNNCACTAGC_L5Bc_rnc-HTF_1.unique.hyb.p_values.tab" ),
+#   file.path( hyb_p_val_dir, "DM_MiSeq", "all_NNNTCTCTAGC_L5Bd_rnc-HTF_2.unique.hyb.p_values.tab" ),
+#   file.path( hyb_p_val_dir, "DM_NextSeq", "all_NNNCACTAGC_L5Bc_rnc-HTF_1.unique.hyb.p_values.tab" ),
+#   file.path( hyb_p_val_dir, "DM_NextSeq", "all_NNNTCTCTAGC_L5Bd_rnc-HTF_2.unique.hyb.p_values.tab" ),
+#   file.path( hyb_p_val_dir, "JW_BC1", "all_NNNATTAGC_L5Ab_BC1_rnc-HTF_1.unique.hyb.p_values.tab" ),
+#   file.path( hyb_p_val_dir, "JW_BC1", "all_NNNCACTAGC_L5Bc_BC1_rnc-HTF_3.unique.hyb.p_values.tab" ),
+#   file.path( hyb_p_val_dir, "JW_BC1", "all_NNNGCGCAGC_L5Ac_BC1_rnc-HTF-2.unique.hyb.p_values.tab" ),
+#   file.path( hyb_p_val_dir, "JW_BC4", "all_NNNCACTAGC_L5Bc_BC4_rnc-HTF_4.unique.hyb.p_values.tab" ),
+#   file.path( hyb_p_val_dir, "SM1", "all_NNNTGTCAC_RNaseIII_TSB.unique.hyb.p_values.tab" ),
+#   file.path( hyb_p_val_dir, "SM1", "all_NNNACAGTG_RNaseIII_RPMI.unique.hyb.p_values.tab" ),
+#   file.path( hyb_p_val_dir, "SM2", "all_NNNCGTGAT_RNase_III_TSB.unique.hyb.p_values.tab" ),
+#   file.path( hyb_p_val_dir, "SM2", "all_NNNGCACTA_RNase_III_RPMI_0_ligation.unique.hyb.p_values.tab" ),
+#   file.path( hyb_p_val_dir, "SM2", "all_NNNTAGTGC_RNase_III_RPMI_60_ligation.unique.hyb.p_values.tab" ),
+#   file.path( hyb_p_val_dir, "SM2", "all_NNNATCACG_RNase_III_RPMI_120_ligation.unique.hyb.p_values.tab" ),
+#   file.path( hyb_p_val_dir, "SM3", "all_NNNTAGTGC_RNaseIII_TSB.unique.hyb.p_values.tab" ),
+#   file.path( hyb_p_val_dir, "SM3", "all_NNNATCACG_RNaseIII_RPMI.unique.hyb.p_values.tab" )  ) 
+
+# names(list_of_files ) <- c( "DM_MiSeq_Bc", 
+#                             "DM_MiSeq_Bd", 
+#                             "DM_NextSeq_Bc",
+#                             "DM_NextSeq_Bd",
+#                             "JW_BC1_Ab",
+#                             "JW_BC1_Bc",
+#                             "JW_BC1_Ac",
+#                             "JW_BC4_Bc",
+#                             "SM1_TSB",
+#                             "SM1_RPMI",
+#                             "SM2_TSB",
+#                             "SM2_RPMI_0",
+#                             "SM2_RPMI_60",
+#                             "SM2_RPMI_120",                    
+#                             "SM3_TSB",                            
+#                             "SM3_RPMI" )
 
 
 if ( dataset_type == "JT_Only") {

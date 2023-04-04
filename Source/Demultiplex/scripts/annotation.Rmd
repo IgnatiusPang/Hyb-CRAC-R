@@ -1,10 +1,7 @@
----
-title: "R Notebook"
-output: html_notebook
----
-
-```{r include = FALSE}
+## ----include = FALSE--------------------------------------------------------------------------------------------------------------------------------------------------
 ## Load libraries 
+
+```{r}
 if(!require(pacman)) {
   install.packages("pacman")
   library(pacman)
@@ -20,12 +17,12 @@ p_load(magrittr)
 p_load(Biostrings)
 p_load(rtracklayer )
 p_load(furrr)
-
 ```
 
 
-```{r include = FALSE}
+## ----include = FALSE--------------------------------------------------------------------------------------------------------------------------------------------------
 ## Directories Management
+```{r}
 base_dir <-  here::here() 
 data_dir <- file.path( base_dir, "Data")
 results_dir <- file.path(base_dir, "Results")
@@ -41,34 +38,33 @@ source( file.path( source_dir, "Common", "common_functions.R") )
 create_dir_if_not_exists(merged_hyb_p_val_dir )
 
 num_groups_for_calc <- 30  ## split gff file into groups to aid quicker computation
- 
-
 ```
 
 
-knitr::purl( file.path( source_dir, "Demultiplex", "scripts", "annotation.Rmd"),
-output=file.path( source_dir,  "Demultiplex",  "scripts",  "annotation.R"))
-                                               
 
-
-```{r}
+## ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 # hyb_file <- "/home/ignatius/PostDoc/2020/StaphCLASH2020/Results/Hybrids_Merged/DM_MiSeq/all_NNNCACTAGC_L5Bc_rnc-HTF_1.compressed.pyCRAC_comp_Sa_JKD6009_hybrids.merged.hyb"
 # 
 # gtf_file <- "/home/ignatius/PostDoc/2020/StaphCLASH2020/Data/Genomic/JKD6009/Annotation/Hyb_pyCRAC/compiled_edited_features.gtf"
 # 
 # rna_type_file <- "/home/ignatius/PostDoc/2020/StaphCLASH2020/Data/Genomic/JKD6009/Annotation/Hyb_pyCRAC/rna_type_priority.tab"
 
-hyb_file <- snakemake@input[["HYB_FILE"]]
-gtf_file <- snakemake@input[["GTF_FILE"]]
-rna_type_file <- snakemake@input[["RNA_TYPE_FILE"]]
-output_file <- snakemake@output[["hyb_annot_output"]]
+# hyb_file <- snakemake@input[["HYB_FILE"]]
+# gtf_file <- snakemake@input[["GTF_FILE"]]
+# rna_type_file <- snakemake@input[["RNA_TYPE_FILE"]]
+# output_file <- snakemake@output[["hyb_annot_output"]]
+
+```{r}
+hyb_file <- "/media/ignatius/Dinosaur/Winton_CLASH/DM_NextSeq/Processed_Data/Hyb_Merge/all_NNNTCTCTAGC_L5Bd_rnc-HTF_2.compressed.pyCRAC_comp_Sa_JKD6009_hybrids.merged.hyb"
+gtf_file <- "/home/ignatius/PostDoc/2020/StaphCLASH2020/Data/Genomic/JKD6009/Annotation/Hyb_pyCRAC/GCF_900607245.1_JKD6009_genomic_merge_features_simple_annot_checked_edited.gtf"
+rna_type_file <- "/home/ignatius/PostDoc/2020/StaphCLASH2020/Data/Genomic/JKD6009/Annotation/Hyb_pyCRAC/rna_type_priority.tab"
+output_file <- "/media/ignatius/Dinosaur/Winton_CLASH/DM_NextSeq/Processed_Data/Hyb_Annot/all_NNNTCTCTAGC_L5Bd_rnc-HTF_2.compressed.pyCRAC_comp_Sa_JKD6009_hybrids_annot.hyb"
 ```
 
 
-# Format Hyb output
+## ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
 ```{r}
-
-
 hyb_tbl <- vroom::vroom( hyb_file, col_names = FALSE) %>%
   mutate(row_id = row_number())
 
@@ -93,11 +89,10 @@ hyb_colnames <- c(
 colnames( hyb_tbl ) <- hyb_colnames
 
 # hyb_tbl
-
 ```
 
 
-
+## ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ```{r}
 gff_obj <- import.gff2(gtf_file)
 
@@ -107,11 +102,11 @@ gff_tbl <- as.data.frame( gff_obj )
 
 
 rna_coordinates <- gff_tbl %>%
-  dplyr::mutate( seqnames = "NZ_HG941718.1") %>%
+  dplyr::mutate( seqnames = "Saa_6009_C1") %>%
   mutate( seqnames = as.character(seqnames),
           type = as.character( type)) %>%
   mutate( feature_name = pmap_chr( list( seqnames, gene_id,  transcript_id, type ), ~paste0(c(..1, ..2, ..3, ..4), collapse="|")      )) %>%
-  dplyr::select ( seqnames, start, end, width, strand, feature_name, type) %>%
+  dplyr::select ( seqnames, start, end, width, strand, feature_name, type, rna_type) %>%
   dplyr::rename( feature_chromosome = "seqnames",
                  feature_start = "start", 
                  feature_end = "end",
@@ -121,7 +116,8 @@ rna_coordinates <- gff_tbl %>%
 
 ## substitute into column 4 and column 10
 
-
+# gff_tbl %>% 
+#   dplyr::filter( ID == "Saa_6009_C1_srna1") 
 # 
 # gff_tbl %>%
 #   distinct( type)
@@ -130,9 +126,10 @@ group_size <- ceiling( max( rna_coordinates$feature_end ) / num_groups_for_calc 
 
 rna_coordinates <- rna_coordinates %>%
   mutate( group_id = (feature_end %/% group_size)   + 1 ) 
-
 ```
 
+
+## ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ```{r}
 hyb_tbl <- hyb_tbl %>%
   mutate( left_group_id_stop = (left_genomic_stop %/% group_size)   + 1 )  %>%
@@ -141,10 +138,12 @@ hyb_tbl <- hyb_tbl %>%
   mutate( right_group_id_start = (right_genomic_start %/% group_size)   + 1 )
 ```
 
+## ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ```{r}
 rna_type_tbl <- vroom::vroom( rna_type_file )
 ```
 
+## ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ```{r}
 left_names_step_1.a <- hyb_tbl  %>%
   dplyr::filter( left_group_id_stop == left_group_id_start  ) %>%
@@ -153,8 +152,8 @@ left_names_step_1.a <- hyb_tbl  %>%
                                               "left_group_id_stop" = "group_id") )  %>%
     dplyr::filter ( ( feature_start <= left_genomic_start & left_genomic_start <= feature_end ) |
                     ( feature_start <= left_genomic_stop & left_genomic_stop <= feature_start ) ) %>%
-    left_join( rna_type_tbl, by=c("feature_type" = "rna_type"))  %>%
-    dplyr::select( row_id, feature_name, rank)
+    left_join( rna_type_tbl, by=c("rna_type" = "rna_type"))  %>%
+    dplyr::select( row_id, feature_name, rank, rna_type)
 
 left_names_step_1.b <-  hyb_tbl %>%
   dplyr::filter( left_group_id_stop != left_group_id_start  )  %>%
@@ -162,14 +161,14 @@ left_names_step_1.b <-  hyb_tbl %>%
   dplyr::left_join( rna_coordinates, by = c( "left_chromo" = "feature_chromosome" ) )  %>%
     dplyr::filter ( ( feature_start <= left_genomic_start & left_genomic_start <= feature_end ) |
                     ( feature_start <= left_genomic_stop & left_genomic_stop <= feature_start ) ) %>%
-    left_join( rna_type_tbl, by=c("feature_type" = "rna_type"))  %>%
-    dplyr::select( row_id, feature_name, rank)
+    left_join( rna_type_tbl, by=c("rna_type" = "rna_type"))  %>%
+    dplyr::select( row_id, feature_name, rank, rna_type)
 
 left_names_step_1 <- left_names_step_1.a %>%
   bind_rows( left_names_step_1.b)
 
-rm( left_names_step_1.a, left_names_step_1.b)
-gc()
+# rm( left_names_step_1.a, left_names_step_1.b)
+# gc()
 
 left_min_rank <- left_names_step_1 %>%
       dplyr::select(-feature_name) %>%
@@ -181,14 +180,16 @@ left_min_rank <- left_names_step_1 %>%
 
 left_names_step_2 <- left_names_step_1 %>%
       dplyr::inner_join( left_min_rank, by =c("rank" = "rank", 
-                                               "row_id" = "row_id"))  %>%
+                                               "row_id" = "row_id",
+                                               "rna_type" = "rna_type"))  %>%
       dplyr::select(-rank_row_id, -rank) %>%
-      dplyr::rename( left_feature="feature_name")
-    
+      dplyr::mutate(left_feature = str_split( feature_name, "\\|")  %>% purrr::map2_chr ( rna_type, 
+                                                                                          ~{ paste( c(.x[1:3], .y)  , collapse="|")}))
+```    
 
-```
 
 
+## ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ```{r}
 right_names_step_1.a <- hyb_tbl  %>%
   dplyr::filter( right_group_id_stop == right_group_id_start  ) %>%
@@ -197,8 +198,8 @@ right_names_step_1.a <- hyb_tbl  %>%
                                               "right_group_id_stop" = "group_id") )  %>%
     dplyr::filter ( ( feature_start <= right_genomic_start & right_genomic_start <= feature_end ) |
                     ( feature_start <= right_genomic_stop & right_genomic_stop <= feature_start ) ) %>%
-    left_join( rna_type_tbl, by=c("feature_type" = "rna_type"))  %>%
-    dplyr::select( row_id, feature_name, rank)
+    left_join( rna_type_tbl, by=c("rna_type" = "rna_type"))  %>%
+    dplyr::select( row_id, feature_name, rank, rna_type)
 
 right_names_step_1.b <-  hyb_tbl %>%
   dplyr::filter( right_group_id_stop != right_group_id_start  )  %>%
@@ -206,14 +207,14 @@ right_names_step_1.b <-  hyb_tbl %>%
   dplyr::left_join( rna_coordinates, by = c( "right_chromo" = "feature_chromosome" ) )  %>%
     dplyr::filter ( ( feature_start <= right_genomic_start & right_genomic_start <= feature_end ) |
                     ( feature_start <= right_genomic_stop & right_genomic_stop <= feature_start ) ) %>%
-    left_join( rna_type_tbl, by=c("feature_type" = "rna_type"))  %>%
-    dplyr::select( row_id, feature_name, rank)
+    left_join( rna_type_tbl, by=c("rna_type" = "rna_type"))  %>%
+    dplyr::select( row_id, feature_name, rank, rna_type)
 
 right_names_step_1 <- right_names_step_1.a %>%
   bind_rows( right_names_step_1.b)
 
-rm( right_names_step_1.a, right_names_step_1.b)
-gc()
+# rm( right_names_step_1.a, right_names_step_1.b)
+# gc()
 
 
 
@@ -227,14 +228,16 @@ right_min_rank <- right_names_step_1 %>%
 
 right_names_step_2 <- right_names_step_1 %>%
       dplyr::inner_join( right_min_rank, by =c("rank" = "rank", 
-                                               "row_id" = "row_id"))  %>%
+                                               "row_id" = "row_id",
+                                               "rna_type" = "rna_type"))  %>%
       dplyr::select(-rank_row_id, -rank) %>%
-      dplyr::rename( right_feature="feature_name")
-    
+      dplyr::mutate(right_feature = str_split( feature_name, "\\|")  %>% purrr::map2_chr ( rna_type, 
+                                                                                          ~{ paste( c(.x[1:3], .y)  , collapse="|")}))
+```    
 
-```
 
 
+## ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ```{r}
  hyb_tbl_merged <-  hyb_tbl %>%
   left_join( left_names_step_2, by=c( "row_id"))  %>% 
@@ -242,18 +245,16 @@ right_names_step_2 <- right_names_step_1 %>%
   dplyr::select(-row_id)
 ```
 
-
-```{r}
+## ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 # feature_overlap_partial <- partial( feature_overlap, feature_table = rna_coordinates, rna_type_priority=rna_type_tbl)
 # 
 # hyb_tbl_merged <-  hyb_tbl %>% 
 #   mutate( left_feature = future_pmap_chr( list( left_chromo, left_genomic_start, left_genomic_stop), ~ feature_overlap_partial(..1, ..2, ..3)   ) ) %>%
 #   mutate( right_feature = future_pmap_chr( list( right_chromo, right_genomic_start, right_genomic_stop), ~ feature_overlap_partial(..1, ..2, ..3)   ) ) 
-```
 
 
-
+## ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ```{r}
 hyb_tbl_final <- hyb_tbl_merged %>%
   dplyr::select(one_of( c(
@@ -267,9 +268,7 @@ hyb_tbl_final <- hyb_tbl_merged %>%
 "optional_text" )))
 ```
 
-
-
+## ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
 ```{r}
-vroom::vroom_write( hyb_tbl_final, col_names=FALSE, path=output_file ) 
+vroom::vroom_write( hyb_tbl_final, col_names=FALSE, file=output_file ) 
 ```
-

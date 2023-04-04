@@ -46,6 +46,7 @@ GENOME_SIZE =  os.path.join(GENOME_DIR,  "Sa_JKD6009.genome")
 NOVO_INDEX =   os.path.join(GENOME_DIR,  "Sa_JKD6009.nix")  
 HYB_DB_NAME = "Sa_JKD6009"
 RNA_TYPE_PRIORITIES =  os.path.join(GTF_FILE_DIR,  "rna_type_priority.tab")
+CHROMOSOME_FEATURE_FILE =  os.path.join(GENOME_DIR,  "JDK6009_chromosome_features.tab")  
 
 ## Source Directories 
 SOURCE_DIR= os.path.join( BASE_DIR, "Source" ) 

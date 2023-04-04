@@ -359,6 +359,7 @@ rule run_pyCRAC:
 
 
       ## Input file must be in current directory and have the .fastq suffix
+      ## The CRAC_pipeline_SE script itself re-run PCR de-duplication step with 'pyFastqDuplicateRemover.py'
       {PYCRAC_SRC_DIR}/CRAC_pipeline_SE.py \
       -f $FILE_NAME \
       -g {pyCRAC_GTF_FILE} \
@@ -406,6 +407,7 @@ rule run_annotation:
                   "all_{barcode}.compressed.pyCRAC_comp_" + ORGANISM + "_hybrids.merged.hyb"),
      GTF_FILE = HYB_GTF_FILE,
      RNA_TYPE_FILE = RNA_TYPE_PRIORITIES
+     CHROMOSOME_FEATURE_FILE = CHROMOSOME_FEATURE_FILE
   output: 
     hyb_annot_output = os.path.join(OUTPUT_DIR, "Hyb_Annot", "all_{barcode}.compressed.pyCRAC_comp_" + ORGANISM + "_hybrids_annot.hyb"),
   envmodules:
